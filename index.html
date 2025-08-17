@@ -83,27 +83,27 @@
       cursor: pointer;
       color: red;
     }
-    .video-card {
+    /* Исправленные стили для видеокарточек */
+    .video-item {
       display: flex;
       align-items: center;
-      margin-bottom: 10px;
       cursor: pointer;
     }
-    .video-card img {
+    .video-item img {
       width: 120px;
       height: 67px;
       border-radius: 4px;
-      margin-right: 10px;
+      margin-right: 12px;
     }
-    .video-card-info {
+    .video-item-info {
       flex-grow: 1;
     }
-    .video-card-title {
+    .video-item-title {
       font-weight: bold;
       font-size: 14px;
       margin-bottom: 4px;
     }
-    .video-card-channel, .video-card-views {
+    .video-item-channel {
       font-size: 12px;
       color: #888;
     }
@@ -133,7 +133,7 @@
   </div>
 
     <div id="profile" class="page">
-    <h2>Настройки</h2>
+    <h2>Профиль</h2>
     <button id="toggle-theme">Сменить тему</button>
   </div>
 
@@ -259,13 +259,13 @@
       videos.forEach(video => {
         const videoUrl = `https://www.youtube.com/watch?v=${video.id.videoId}`;
         const videoCard = document.createElement('div');
-        videoCard.className = 'card video-card';
+        videoCard.className = 'card video-item';
         videoCard.onclick = () => loadVideo(videoUrl);
         videoCard.innerHTML = `
           <img src="${video.snippet.thumbnails.medium.url}" alt="Thumbnail">
-          <div class="video-card-info">
-            <div class="video-card-title">${video.snippet.title}</div>
-            <div class="video-card-channel">${video.snippet.channelTitle}</div>
+          <div class="video-item-info">
+            <div class="video-item-title">${video.snippet.title}</div>
+            <div class="video-item-channel">${video.snippet.channelTitle}</div>
           </div>
         `;
         container.appendChild(videoCard);
