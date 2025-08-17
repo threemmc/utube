@@ -160,7 +160,7 @@
 
   async function loadChannelVideos(channelId) {
     try {
-      const res = await fetch(`https://invidious.snopyta.org/api/v1/channels/${channelId}`);
+      const res = await fetch(`https://inv.nadeko.net/api/v1/channels/${channelId}`);
       const data = await res.json();
       return data.latestVideos || [];
     } catch(e) {
