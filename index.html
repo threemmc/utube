@@ -3,194 +3,190 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Мой YouTube</title>
+  <title>YouTube Lite + Push</title>
   <style>
-    :root {
-      --bg: #fff;
-      --text: #222;
-      --card: #f5f5f5;
-      --button: #e0e0e0;
-    }
-    body.dark {
-      --bg: #121212;
-      --text: #eee;
-      --card: #1e1e1e;
-      --button: #2a2a2a;
-    }
-    body {
-      margin: 0; padding: 0;
-      background: var(--bg);
-      color: var(--text);
-      font-family: sans-serif;
-      overflow-x: hidden;
-      transition: background 0.3s, color 0.3s;
-    }
-    .page {
-      display: none;
-      padding: 16px;
-      animation: fade 0.3s;
-      box-sizing: border-box;
-      max-width: 100%;
-    }
-    .active { display: block; }
-    @keyframes fade {
-      from { opacity: 0; }
-      to { opacity: 1; }
-    }
-    .card {
-      background: var(--card);
-      padding: 12px;
-      margin: 8px 0;
-      border-radius: 8px;
-    }
-    input, button {
-      padding: 8px;
-      margin: 4px 0;
-      border: none;
-      border-radius: 6px;
-      width: 100%;
-      max-width: 400px;
-      box-sizing: border-box;
-    }
-    button {
-      background: var(--button);
-      font-weight: bold;
-      cursor: pointer;
-    }
-    button:hover { opacity: 0.8; }
-    #tabs {
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      width: 100%;
-      display: flex;
-      background: var(--card);
-      border-top: 1px solid #ccc;
-    }
-    #tabs button {
-      flex: 1;
-      padding: 12px;
-      border-radius: 0;
-    }
-    iframe {
-      width: 100%;
-      max-width: 100%;
-      height: 220px;
-      border-radius: 8px;
-    }
-    .delete-btn {
-      float: right;
-      cursor: pointer;
-      color: red;
-    }
+    body {margin:0;font-family:Arial, sans-serif;background:#111;color:#fff;}
+    header {text-align:center;padding:10px;background:#222;font-size:20px;font-weight:bold;}
+    .tabs {position:fixed;bottom:0;width:100%;display:flex;background:#222;}
+    .tab {flex:1;text-align:center;padding:12px;cursor:pointer;color:#aaa;}
+    .tab.active {color:#1e90ff;font-weight:bold;}
+    .content {padding:20px;margin-bottom:60px;}
+    .btn {display:block;width:100%;margin:8px 0;padding:10px;background:#333;border:none;border-radius:8px;color:#1e90ff;font-size:16px;cursor:pointer;}
+    .btn:hover {background:#444;}
+    input {width:100%;padding:10px;margin:10px 0;border-radius:8px;border:none;}
+    .channel {display:flex;justify-content:space-between;align-items:center;padding:8px;margin:5px 0;background:#333;border-radius:6px;}
+    .remove {color:red;font-weight:bold;cursor:pointer;}
+    .video {margin:12px 0;background:#222;border-radius:8px;overflow:hidden;}
+    .video img {width:100%;display:block;}
+    .video p {margin:8px;font-size:14px;}
   </style>
 </head>
 <body>
-  <!-- Главная -->
-  <div id="home" class="page active">
-    <h2>Главная</h2>
-    <input id="video-url" placeholder="Вставь ссылку на видео">
-    <button onclick="loadVideo()">Смотреть</button>
-    <div id="player"></div>
-  </div>
 
-  <!-- Подписки -->
-  <div id="subs" class="page">
-    <h2>Подписки</h2>
-    <input id="channel-url" placeholder="Вставь ссылку на канал или @username">
-    <button onclick="addChannel()">Добавить канал</button>
-    <div>
-      <button onclick="sortChannels()">Сортировать</button>
-    </div>
-    <div id="channels"></div>
-  </div>
+<header>🎬 YouTube Lite</header>
 
-  <!-- Профиль -->
-  <div id="profile" class="page">
-    <h2>Профиль</h2>
-    <button id="toggle-theme">Сменить тему</button>
-  </div>
+<div id="main" class="content"></div>
+<div id="subs" class="content" style="display:none;">
+  <h2>Подписки</h2>
+  <input type="text" id="channelInput" placeholder="https://youtube.com/@username">
+  <button class="btn" onclick="addChannel()">Добавить канал</button>
+  <div id="channelList"></div>
+</div>
+<div id="profile" class="content" style="display:none;">
+  <h2>Профиль</h2>
+  <button class="btn" onclick="toggleTheme()">Сменить тему</button>
+  <button class="btn" onclick="subscribeNotifications()">Включить уведомления</button>
+</div>
 
-  <!-- Нижнее меню -->
-  <div id="tabs">
-    <button onclick="showPage('home')">Главная</button>
-    <button onclick="showPage('subs')">Подписки</button>
-    <button onclick="showPage('profile')">Профиль</button>
-  </div>
+<div class="tabs">
+  <div class="tab active" onclick="showTab('main', this)">Главная</div>
+  <div class="tab" onclick="showTab('subs', this)">Подписки</div>
+  <div class="tab" onclick="showTab('profile', this)">Профиль</div>
+</div>
 
-  <script>
-    // Переключение вкладок
-    function showPage(id) {
-      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-      document.getElementById(id).classList.add('active');
-    }
+<script>
+let channels = JSON.parse(localStorage.getItem("channels") || "[]");
+let darkTheme = true;
+let lastVideos = JSON.parse(localStorage.getItem("lastVideos") || "{}");
 
-    // Плеер
-    function extractVideoId(url) {
-      if (url.includes("youtu.be/")) return url.split("youtu.be/")[1].split("?")[0];
-      if (url.includes("watch?v=")) return url.split("v=")[1].split("&")[0];
-      return null;
-    }
-    function loadVideo() {
-      const url = document.getElementById("video-url").value.trim();
-      const id = extractVideoId(url);
-      if (id) {
-        document.getElementById("player").innerHTML =
-          `<iframe src="https://www.youtube.com/embed/${id}" frameborder="0" allowfullscreen></iframe>`;
-      } else {
-        alert("Неверная ссылка на видео");
-      }
-    }
+function showTab(id, el) {
+  document.querySelectorAll(".content").forEach(c => c.style.display = "none");
+  document.getElementById(id).style.display = "block";
+  document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+  el.classList.add("active");
+  if (id === "main") loadVideos();
+}
 
-    // Подписки
-    let channels = JSON.parse(localStorage.getItem("channels") || "[]");
-    function renderChannels() {
-      const box = document.getElementById("channels");
-      box.innerHTML = "";
-      channels.forEach((ch, i) => {
-        const div = document.createElement("div");
-        div.className = "card";
-        div.innerHTML = `${ch} <span class="delete-btn" onclick="deleteChannel(${i})">❌</span>`;
-        box.appendChild(div);
-      });
-    }
-    function addChannel() {
-      const url = document.getElementById("channel-url").value.trim();
-      if (!url) return;
-      let name = url;
-      if (url.includes("@")) {
-        name = url.split("@")[1];
-      } else if (url.includes("/channel/")) {
-        name = url.split("/channel/")[1];
-      }
-      if (!channels.includes(name)) {
-        channels.push(name);
-        localStorage.setItem("channels", JSON.stringify(channels));
-        renderChannels();
-      }
-    }
-    function deleteChannel(i) {
-      channels.splice(i, 1);
+function addChannel() {
+  const input = document.getElementById("channelInput").value.trim();
+  if (!input) return;
+  let username = input.split("@").pop();
+  if (channels.find(c => c.username === username)) return;
+  channels.push({ username, id: null });
+  localStorage.setItem("channels", JSON.stringify(channels));
+  renderChannels();
+  getChannelId(username);
+  document.getElementById("channelInput").value = "";
+}
+
+function renderChannels() {
+  const list = document.getElementById("channelList");
+  list.innerHTML = "";
+  channels.forEach((ch, i) => {
+    const div = document.createElement("div");
+    div.className = "channel";
+    div.innerHTML = `<span>@${ch.username}</span><span class="remove" onclick="removeChannel(${i})">✖</span>`;
+    list.appendChild(div);
+  });
+}
+
+function removeChannel(i) {
+  channels.splice(i, 1);
+  localStorage.setItem("channels", JSON.stringify(channels));
+  renderChannels();
+}
+
+async function getChannelId(username) {
+  try {
+    let res = await fetch(`https://r.jina.ai/https://www.youtube.com/@${username}`);
+    let html = await res.text();
+    let match = html.match(/"channelId":"(UC[0-9A-Za-z_-]+)"/);
+    if (match) {
+      let id = match[1];
+      let ch = channels.find(c => c.username === username);
+      if (ch) ch.id = id;
       localStorage.setItem("channels", JSON.stringify(channels));
-      renderChannels();
     }
-    function sortChannels() {
-      channels.sort();
-      localStorage.setItem("channels", JSON.stringify(channels));
-      renderChannels();
-    }
-    renderChannels();
+  } catch (e) { console.log("Ошибка:", e); }
+}
 
-    // Тема
-    function applyTheme(){
-      const theme=localStorage.getItem('theme')||'light';
-      document.body.classList.toggle('dark', theme==='dark');
+async function loadVideos() {
+  const main = document.getElementById("main");
+  main.innerHTML = "<h2>Главная</h2>";
+  for (let ch of channels) {
+    if (!ch.id) continue;
+    try {
+      let res = await fetch(`https://api.rss2json.com/v1/api.json?rss=https://www.youtube.com/feeds/videos.xml?channel_id=${ch.id}`);
+      let data = await res.json();
+      if (data.items) {
+        data.items.slice(0, 3).forEach(v => {
+          let div = document.createElement("div");
+          div.className = "video";
+          div.innerHTML = `
+            <a href="https://purify-video.github.io/?v=${encodeURIComponent(v.link)}" target="_blank">
+              <img src="${v.thumbnail}" alt="">
+              <p>${v.title}</p>
+            </a>`;
+          main.appendChild(div);
+        });
+        checkNewVideo(ch.username, data.items[0]);
+      }
+    } catch (e) { console.log("Видео ошибка:", e); }
+  }
+}
+
+function toggleTheme() {
+  darkTheme = !darkTheme;
+  if (darkTheme) {
+    document.body.style.background = "#111";
+    document.body.style.color = "#fff";
+  } else {
+    document.body.style.background = "#fff";
+    document.body.style.color = "#000";
+  }
+}
+
+// ====== Уведомления ======
+
+async function subscribeNotifications() {
+  if (!("Notification" in window)) return alert("Уведомления не поддерживаются!");
+  let perm = await Notification.requestPermission();
+  if (perm === "granted") alert("Уведомления включены!");
+}
+
+function checkNewVideo(username, latest) {
+  if (!lastVideos[username] || lastVideos[username] !== latest.link) {
+    if (lastVideos[username]) { 
+      showNotification(`${username} загрузил новое видео!`, latest.title, latest.link);
     }
-    applyTheme();
-    document.getElementById('toggle-theme').onclick=()=>{
-      const isDark=document.body.classList.toggle('dark');
-      localStorage.setItem('theme', isDark?'dark':'light');
-    };
-  </script>
+    lastVideos[username] = latest.link;
+    localStorage.setItem("lastVideos", JSON.stringify(lastVideos));
+  }
+}
+
+function showNotification(title, body, url) {
+  if (Notification.permission === "granted") {
+    navigator.serviceWorker.getRegistration().then(reg => {
+      if (reg) {
+        reg.showNotification(title, {
+          body,
+          icon: "https://www.youtube.com/s/desktop/fe91f92a/img/favicon_144x144.png",
+          data: { url }
+        });
+      }
+    });
+  }
+}
+
+// ====== Service Worker ======
+
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("sw.js");
+}
+
+renderChannels();
+loadVideos();
+</script>
+
+<!-- Service Worker (sw.js внутри) -->
+<script id="sw" type="javascript/worker">
+self.addEventListener("notificationclick", function(e) {
+  e.notification.close();
+  if (e.notification.data.url) {
+    clients.openWindow(e.notification.data.url);
+  }
+});
+</script>
+
 </body>
 </html>
