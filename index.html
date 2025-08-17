@@ -119,78 +119,129 @@
   </div>
 
   <script>
-    // Переключение вкладок
-    function showPage(id) {
-      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-      document.getElementById(id).classList.add('active');
-    }
+  // --- Переключение вкладок ---
+  function showPage(id) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+  }
 
-    // Плеер
-    function extractVideoId(url) {
-      if (url.includes("youtu.be/")) return url.split("youtu.be/")[1].split("?")[0];
-      if (url.includes("watch?v=")) return url.split("v=")[1].split("&")[0];
-      return null;
+  // --- Плеер ---
+  function extractVideoId(url) {
+    if (url.includes("youtu.be/")) return url.split("youtu.be/")[1].split("?")[0];
+    if (url.includes("watch?v=")) return url.split("v=")[1].split("&")[0];
+    if (url.includes("shorts/")) return url.split("shorts/")[1].split("?")[0];
+    return null;
+  }
+
+  function loadVideo() {
+    const url = document.getElementById("video-url").value.trim();
+    const id = extractVideoId(url);
+    if (id) {
+      document.getElementById("player").innerHTML =
+        `<iframe src="https://www.youtube.com/embed/${id}" frameborder="0" allowfullscreen></iframe>`;
+    } else {
+      alert("Неверная ссылка на видео");
     }
-    function loadVideo() {
-      const url = document.getElementById("video-url").value.trim();
-      const id = extractVideoId(url);
-      if (id) {
-        document.getElementById("player").innerHTML =
-          `<iframe src="https://www.youtube.com/embed/${id}" frameborder="0" allowfullscreen></iframe>`;
-      } else {
-        alert("Неверная ссылка на видео");
+  }
+
+  // --- Подписки ---
+  let channels = JSON.parse(localStorage.getItem("channels") || "[]");
+
+  async function getChannelId(username) {
+    try {
+      const res = await fetch(`https://invidious.snopyta.org/api/v1/search?q=${username}&type=channel`);
+      const data = await res.json();
+      if (data.length > 0) return data[0].authorId;
+    } catch(e) {
+      console.error("Ошибка поиска канала:", e);
+    }
+    return null;
+  }
+
+  async function loadChannelVideos(channelId) {
+    try {
+      const res = await fetch(`https://invidious.snopyta.org/api/v1/channels/${channelId}`);
+      const data = await res.json();
+      return data.latestVideos || [];
+    } catch(e) {
+      console.error("Ошибка загрузки видео:", e);
+      return [];
+    }
+  }
+
+  async function renderChannels() {
+    const box = document.getElementById("channels");
+    box.innerHTML = "";
+
+    for (let i = 0; i < channels.length; i++) {
+      let ch = channels[i];
+      let channelId = ch;
+
+      if (ch.startsWith("@")) {
+        channelId = await getChannelId(ch.replace("@", ""));
       }
-    }
 
-    // Подписки
-    let channels = JSON.parse(localStorage.getItem("channels") || "[]");
-    function renderChannels() {
-      const box = document.getElementById("channels");
-      box.innerHTML = "";
-      channels.forEach((ch, i) => {
-        const div = document.createElement("div");
-        div.className = "card";
-        div.innerHTML = `${ch} <span class="delete-btn" onclick="deleteChannel(${i})">❌</span>`;
-        box.appendChild(div);
+      if (!channelId) continue;
+
+      const div = document.createElement("div");
+      div.className = "card";
+      div.innerHTML = `<h3>${ch} <span class="delete-btn" onclick="deleteChannel(${i})">❌</span></h3>`;
+
+      const videos = await loadChannelVideos(channelId);
+
+      videos.slice(0, 3).forEach(v => {
+        div.innerHTML += `
+          <div>
+            <a href="https://youtu.be/${v.videoId}" target="_blank">${v.title}</a>
+          </div>`;
       });
-    }
-    function addChannel() {
-      const url = document.getElementById("channel-url").value.trim();
-      if (!url) return;
-      let name = url;
-      if (url.includes("@")) {
-        name = url.split("@")[1];
-      } else if (url.includes("/channel/")) {
-        name = url.split("/channel/")[1];
-      }
-      if (!channels.includes(name)) {
-        channels.push(name);
-        localStorage.setItem("channels", JSON.stringify(channels));
-        renderChannels();
-      }
-    }
-    function deleteChannel(i) {
-      channels.splice(i, 1);
-      localStorage.setItem("channels", JSON.stringify(channels));
-      renderChannels();
-    }
-    function sortChannels() {
-      channels.sort();
-      localStorage.setItem("channels", JSON.stringify(channels));
-      renderChannels();
-    }
-    renderChannels();
 
-    // Тема
-    function applyTheme(){
-      const theme=localStorage.getItem('theme')||'light';
-      document.body.classList.toggle('dark', theme==='dark');
+      box.appendChild(div);
     }
-    applyTheme();
-    document.getElementById('toggle-theme').onclick=()=>{
-      const isDark=document.body.classList.toggle('dark');
-      localStorage.setItem('theme', isDark?'dark':'light');
-    };
-  </script>
-</body>
-</html>
+  }
+
+  function addChannel() {
+    const url = document.getElementById("channel-url").value.trim();
+    if (!url) return;
+
+    let name = url;
+    if (url.includes("@")) {
+      name = url; // @username
+    } else if (url.includes("/channel/")) {
+      name = url.split("/channel/")[1];
+    }
+
+    if (!channels.includes(name)) {
+      channels.push(name);
+      localStorage.setItem("channels", JSON.stringify(channels));
+      renderChannels();
+    }
+  }
+
+  function deleteChannel(i) {
+    channels.splice(i, 1);
+    localStorage.setItem("channels", JSON.stringify(channels));
+    renderChannels();
+  }
+
+  function sortChannels() {
+    channels.sort();
+    localStorage.setItem("channels", JSON.stringify(channels));
+    renderChannels();
+  }
+
+  // --- Тема ---
+  function applyTheme() {
+    const theme = localStorage.getItem('theme') || 'light';
+    document.body.classList.toggle('dark', theme === 'dark');
+  }
+  applyTheme();
+
+  document.getElementById('toggle-theme').onclick = () => {
+    const isDark = document.body.classList.toggle('dark');
+    localStorage.setItem('theme', isDark ? 'dark' : 'light');
+  };
+
+  // --- Первичная отрисовка ---
+  renderChannels();
+</script>
