@@ -83,45 +83,19 @@
       cursor: pointer;
       color: red;
     }
-    /* Исправленные стили для видеокарточек */
-    .video-item {
-      display: flex;
-      align-items: center;
-      cursor: pointer;
-    }
-    .video-item img {
-      width: 120px;
-      height: 67px;
-      border-radius: 4px;
-      margin-right: 12px;
-    }
-    .video-item-info {
-      flex-grow: 1;
-    }
-    .video-item-title {
-      font-weight: bold;
-      font-size: 14px;
-      margin-bottom: 4px;
-    }
-    .video-item-channel {
-      font-size: 12px;
-      color: #888;
-    }
   </style>
 </head>
 <body>
-    <div id="home" class="page active">
+  <!-- Главная -->
+  <div id="home" class="page active">
     <h2>Главная</h2>
     <input id="video-url" placeholder="Вставь ссылку на видео">
     <button onclick="loadVideo()">Смотреть</button>
     <div id="player"></div>
-    <hr>
-    <input id="search-query" placeholder="Поиск видео">
-    <button onclick="searchVideos()">Найти</button>
-    <div id="search-results"></div>
   </div>
 
-    <div id="subs" class="page">
+  <!-- Подписки -->
+  <div id="subs" class="page">
     <h2>Подписки</h2>
     <input id="channel-url" placeholder="Вставь ссылку на канал или @username">
     <button onclick="addChannel()">Добавить канал</button>
@@ -129,15 +103,16 @@
       <button onclick="sortChannels()">Сортировать</button>
     </div>
     <div id="channels"></div>
-    <div id="channel-videos"></div>
   </div>
 
-    <div id="profile" class="page">
+  <!-- Профиль -->
+  <div id="profile" class="page">
     <h2>Профиль</h2>
     <button id="toggle-theme">Сменить тему</button>
   </div>
 
-    <div id="tabs">
+  <!-- Нижнее меню -->
+  <div id="tabs">
     <button onclick="showPage('home')">Главная</button>
     <button onclick="showPage('subs')">Подписки</button>
     <button onclick="showPage('profile')">Профиль</button>
@@ -148,9 +123,6 @@
     function showPage(id) {
       document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
       document.getElementById(id).classList.add('active');
-      if (id === 'subs') {
-        fetchAllChannelVideos();
-      }
     }
 
     // Плеер
@@ -159,7 +131,8 @@
       if (url.includes("watch?v=")) return url.split("v=")[1].split("&")[0];
       return null;
     }
-    function loadVideo(url) {
+    function loadVideo() {
+      const url = document.getElementById("video-url").value.trim();
       const id = extractVideoId(url);
       if (id) {
         document.getElementById("player").innerHTML =
@@ -168,33 +141,6 @@
         alert("Неверная ссылка на видео");
       }
     }
-    document.getElementById("video-url").addEventListener("keypress", function(event) {
-      if (event.key === "Enter") {
-        loadVideo(this.value);
-      }
-    });
-    document.querySelector('#home button').onclick = () => loadVideo(document.getElementById("video-url").value);
-
-    // Поиск
-    async function searchVideos() {
-      const query = document.getElementById("search-query").value.trim();
-      if (!query) return;
-      document.getElementById("search-results").innerHTML = 'Загрузка...';
-      const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&key=YOUR_API_KEY`;
-      try {
-        const response = await fetch(url);
-        const data = await response.json();
-        renderVideos(data.items, "search-results");
-      } catch (error) {
-        document.getElementById("search-results").innerHTML = 'Ошибка загрузки результатов.';
-        console.error('Error fetching search results:', error);
-      }
-    }
-    document.getElementById("search-query").addEventListener("keypress", function(event) {
-      if (event.key === "Enter") {
-        searchVideos();
-      }
-    });
 
     // Подписки
     let channels = JSON.parse(localStorage.getItem("channels") || "[]");
@@ -204,7 +150,7 @@
       channels.forEach((ch, i) => {
         const div = document.createElement("div");
         div.className = "card";
-        div.innerHTML = `<strong>${ch}</strong> <span class="delete-btn" onclick="deleteChannel(${i})">❌</span>`;
+        div.innerHTML = `${ch} <span class="delete-btn" onclick="deleteChannel(${i})">❌</span>`;
         box.appendChild(div);
       });
     }
@@ -222,54 +168,16 @@
         localStorage.setItem("channels", JSON.stringify(channels));
         renderChannels();
       }
-      document.getElementById("channel-url").value = '';
-      fetchAllChannelVideos();
     }
     function deleteChannel(i) {
       channels.splice(i, 1);
       localStorage.setItem("channels", JSON.stringify(channels));
       renderChannels();
-      fetchAllChannelVideos();
     }
     function sortChannels() {
       channels.sort();
       localStorage.setItem("channels", JSON.stringify(channels));
       renderChannels();
-      fetchAllChannelVideos();
-    }
-
-    async function fetchAllChannelVideos() {
-      const container = document.getElementById('channel-videos');
-      container.innerHTML = '';
-      for (const channel of channels) {
-        const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(channel)}&type=video&maxResults=5&key=YOUR_API_KEY`;
-        const response = await fetch(url);
-        const data = await response.json();
-        if (data.items && data.items.length > 0) {
-          const header = document.createElement('h3');
-          header.textContent = `Видео от ${data.items[0].snippet.channelTitle}`;
-          container.appendChild(header);
-          renderVideos(data.items, 'channel-videos');
-        }
-      }
-    }
-
-    function renderVideos(videos, containerId) {
-      const container = document.getElementById(containerId);
-      videos.forEach(video => {
-        const videoUrl = `https://www.youtube.com/watch?v=${video.id.videoId}`;
-        const videoCard = document.createElement('div');
-        videoCard.className = 'card video-item';
-        videoCard.onclick = () => loadVideo(videoUrl);
-        videoCard.innerHTML = `
-          <img src="${video.snippet.thumbnails.medium.url}" alt="Thumbnail">
-          <div class="video-item-info">
-            <div class="video-item-title">${video.snippet.title}</div>
-            <div class="video-item-channel">${video.snippet.channelTitle}</div>
-          </div>
-        `;
-        container.appendChild(videoCard);
-      });
     }
     renderChannels();
 
