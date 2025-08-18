@@ -96,6 +96,10 @@
     .video-item:hover {
       opacity: 0.8;
     }
+    .loading {
+      text-align: center;
+      padding: 20px;
+    }
   </style>
 </head>
 <body>
@@ -110,11 +114,10 @@
   <!-- Подписки -->
   <div id="subs" class="page">
     <h2>Подписки</h2>
-    <input id="channel-url" placeholder="Вставь ссылку на канал или @username">
+    <input id="channel-url" placeholder="Вставь @username или ссылку на канал">
     <button onclick="addChannel()">Добавить канал</button>
-    <div>
-      <button onclick="sortChannels()">Сортировать</button>
-    </div>
+    <button onclick="renderChannels()">Обновить</button>
+    <button onclick="sortChannels()">Сортировать</button>
     <div id="channels"></div>
   </div>
 
@@ -136,11 +139,20 @@
   </div>
 
   <script>
+  // Конфигурация
+  const API_INSTANCES = [
+    'https://vid.puffyan.us',
+    'https://invidious.flokinet.to',
+    'https://yt.artemislena.eu'
+  ];
+  const FALLBACK_THUMBNAIL = 'https://i.ytimg.com/vi/{id}/default.jpg';
+
   // --- Переключение вкладок ---
   function showPage(id) {
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     document.getElementById(id).classList.add('active');
     if (id === 'profile') renderHistory();
+    if (id === 'subs') renderChannels();
   }
 
   // --- Плеер ---
@@ -149,7 +161,7 @@
     if (url.includes("youtu.be/")) return url.split("youtu.be/")[1].split("?")[0];
     if (url.includes("watch?v=")) return url.split("v=")[1].split("&")[0];
     if (url.includes("shorts/")) return url.split("shorts/")[1].split("?")[0];
-    if (url.length === 11) return url; // Если введен только ID
+    if (url.length === 11) return url;
     return null;
   }
 
@@ -178,10 +190,14 @@
   let history = JSON.parse(localStorage.getItem("history") || "[]");
 
   function addToHistory(videoId, url) {
-    // Проверяем, нет ли уже этого видео в истории
     if (!history.some(item => item.id === videoId)) {
-      history.unshift({id: videoId, url, date: new Date().toLocaleString()});
-      history = history.slice(0, 50); // Ограничиваем историю
+      history.unshift({
+        id: videoId,
+        url: url,
+        title: `Видео ${videoId}`,
+        date: new Date().toLocaleString()
+      });
+      history = history.slice(0, 50);
       localStorage.setItem("history", JSON.stringify(history));
     }
   }
@@ -195,8 +211,8 @@
 
     container.innerHTML = history.map(item => `
       <div class="video-item" onclick="loadVideoById('${item.id}')">
-        <img src="https://img.youtube.com/vi/${item.id}/default.jpg" width="60">
-        <span>${item.url}</span>
+        <img src="${FALLBACK_THUMBNAIL.replace('{id}', item.id)}" width="60">
+        <span>${item.title}</span>
       </div>
     `).join('');
   }
@@ -204,93 +220,150 @@
   // --- Подписки ---
   let channels = JSON.parse(localStorage.getItem("channels") || "[]");
 
-  async function getChannelId(username) {
-    try {
-      const res = await fetch(`https://invidious.snopyta.org/api/v1/search?q=${encodeURIComponent(username)}&type=channel`);
-      const data = await res.json();
-      return data[0]?.authorId || null;
-    } catch(e) {
-      console.error("Ошибка поиска канала:", e);
-      return null;
+  async function tryApiRequest(endpoint) {
+    for (const instance of API_INSTANCES) {
+      try {
+        const response = await fetch(`${instance}${endpoint}`);
+        if (response.ok) return await response.json();
+      } catch (e) {
+        console.error(`Ошибка на инстансе ${instance}:`, e);
+      }
     }
+    return null;
   }
 
-  async function loadChannelVideos(channelId) {
-    if (!channelId) return [];
-    try {
-      const res = await fetch(`https://inv.nadeko.net/api/v1/channels/${channelId}`);
-      const data = await res.json();
-      return data.latestVideos || [];
-    } catch(e) {
-      console.error("Ошибка загрузки видео:", e);
-      return [];
+  async function getChannelInfo(identifier) {
+    // Если это @username
+    if (identifier.startsWith('@')) {
+      const data = await tryApiRequest(`/api/v1/search?q=${encodeURIComponent(identifier)}&type=channel`);
+      if (data && data.length > 0) {
+        return {
+          id: data[0].authorId,
+          name: data[0].author,
+          thumb: data[0].authorThumbnails?.[2]?.url
+        };
+      }
     }
+    // Если это channel ID
+    else if (identifier.length === 24 && identifier.startsWith('UC')) {
+      const data = await tryApiRequest(`/api/v1/channels/${identifier}`);
+      if (data) {
+        return {
+          id: identifier,
+          name: data.author,
+          thumb: data.authorThumbnails?.[2]?.url
+        };
+      }
+    }
+    return null;
+  }
+
+  async function getChannelVideos(channelId) {
+    const data = await tryApiRequest(`/api/v1/channels/${channelId}/videos`);
+    return data?.videos || [];
   }
 
   async function renderChannels() {
     const box = document.getElementById("channels");
-    box.innerHTML = "<div class='card'>Загрузка...</div>";
+    box.innerHTML = "<div class='card loading'>Загрузка подписок...</div>";
+
+    if (channels.length === 0) {
+      box.innerHTML = "<div class='card'>Добавьте каналы, чтобы видеть их видео</div>";
+      return;
+    }
 
     try {
-      if (channels.length === 0) {
-        box.innerHTML = "<div class='card'>Нет подписок</div>";
-        return;
-      }
+      let html = '';
+      let loadedChannels = 0;
 
-      let html = "";
-      for (let i = 0; i < channels.length; i++) {
-        let ch = channels[i];
-        let channelId = ch;
+      for (const channel of channels) {
+        const channelInfo = await getChannelInfo(channel);
+        if (!channelInfo) continue;
 
-        if (ch.startsWith("@")) {
-          channelId = await getChannelId(ch.replace("@", ""));
-          if (!channelId) continue;
-        }
-
-        const videos = await loadChannelVideos(channelId);
+        const videos = await getChannelVideos(channelInfo.id);
         if (videos.length === 0) continue;
-        
+
+        loadedChannels++;
         html += `
           <div class="card">
-            <h3>${ch} <span class="delete-btn" onclick="deleteChannel(${i})">❌</span></h3>
+            <h3>
+              <img src="${channelInfo.thumb || FALLBACK_THUMBNAIL.replace('{id}', 'channel')}" 
+                   width="24" 
+                   height="24" 
+                   style="border-radius:50%;vertical-align:middle;margin-right:8px;">
+              ${channelInfo.name}
+              <span class="delete-btn" onclick="deleteChannel('${channel}')">❌</span>
+            </h3>
             <div>
-              ${videos.slice(0, 3).map(v => `
-                <div class="video-item" onclick="loadVideoById('${v.videoId}')">
-                  <img src="${v.videoThumbnails?.[0]?.url || `https://img.youtube.com/vi/${v.videoId}/default.jpg`}" width="120">
-                  <span>${v.title}</span>
+              ${videos.slice(0, 3).map(video => `
+                <div class="video-item" onclick="loadVideoById('${video.videoId}')">
+                  <img src="${video.videoThumbnails?.[0]?.url || FALLBACK_THUMBNAIL.replace('{id}', video.videoId)}" 
+                       width="120">
+                  <span>${video.title}</span>
                 </div>
               `).join('')}
             </div>
           </div>`;
       }
-      box.innerHTML = html || "<div class='card'>Не удалось загрузить видео</div>";
+
+      box.innerHTML = loadedChannels > 0 
+        ? html 
+        : "<div class='card'>Не удалось загрузить видео. Попробуйте позже.</div>";
     } catch (e) {
-      box.innerHTML = `<div class="card">Ошибка загрузки: ${e.message}</div>`;
+      console.error("Ошибка рендеринга:", e);
+      box.innerHTML = `
+        <div class="card">
+          <p>Произошла ошибка при загрузке</p>
+          <button onclick="renderChannels()">Попробовать снова</button>
+        </div>
+      `;
     }
   }
 
   function addChannel() {
-    const url = document.getElementById("channel-url").value.trim();
-    if (!url) return;
-
-    let name = url;
-    if (url.includes("@")) {
-      name = url.split('/').pop(); // Берем часть после последнего /
-    } else if (url.includes("/channel/")) {
-      name = url.split("/channel/")[1];
+    const input = document.getElementById("channel-url");
+    const identifier = input.value.trim();
+    
+    if (!identifier) {
+      alert("Введите @username или ссылку на канал");
+      return;
     }
 
-    if (!channels.includes(name)) {
-      channels.push(name);
+    // Извлекаем @username из разных форматов ссылок
+    let channelId;
+    if (identifier.startsWith('@')) {
+      channelId = identifier.split(/[\/\?]/)[0]; // Берем часть до / или ?
+    } 
+    else if (identifier.includes('youtube.com')) {
+      if (identifier.includes('/@')) {
+        channelId = '@' + identifier.split('/@')[1].split('/')[0];
+      } 
+      else if (identifier.includes('/channel/')) {
+        channelId = identifier.split('/channel/')[1].split('/')[0];
+      }
+    }
+    else if (identifier.startsWith('UC') && identifier.length === 24) {
+      channelId = identifier; // Уже channel ID
+    }
+
+    if (!channelId) {
+      alert("Неверный формат. Используйте @username или ссылку на канал");
+      return;
+    }
+
+    if (!channels.includes(channelId)) {
+      channels.push(channelId);
       localStorage.setItem("channels", JSON.stringify(channels));
+      input.value = "";
       renderChannels();
-      document.getElementById("channel-url").value = "";
+    } else {
+      alert("Этот канал уже добавлен");
     }
   }
 
-  function deleteChannel(i) {
-    if (confirm("Удалить эту подписку?")) {
-      channels.splice(i, 1);
+  function deleteChannel(channelId) {
+    if (confirm(`Удалить канал ${channelId} из подписок?`)) {
+      channels = channels.filter(ch => ch !== channelId);
       localStorage.setItem("channels", JSON.stringify(channels));
       renderChannels();
     }
@@ -319,7 +392,10 @@
 
   // --- Инициализация ---
   applyTheme();
-  renderChannels();
+  document.addEventListener('DOMContentLoaded', () => {
+    // Загружаем подписки при первом открытии вкладки
+    document.getElementById('subs').addEventListener('animationend', renderChannels);
+  });
 
   // Горячие клавиши
   document.addEventListener('keydown', (e) => {
