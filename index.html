@@ -100,15 +100,65 @@
       text-align: center;
       padding: 20px;
     }
+    /* Стили для чата */
+    #chat-container {
+      margin-top: 10px;
+      border-top: 1px solid #ccc;
+      padding-top: 10px;
+    }
+    #chat-messages {
+      height: 150px;
+      overflow-y: auto;
+      margin-bottom: 10px;
+      border: 1px solid #ccc;
+      padding: 8px;
+      border-radius: 6px;
+    }
+    .message {
+      margin: 4px 0;
+      padding: 4px;
+      border-radius: 4px;
+      background: var(--button);
+    }
+    .message .author {
+      font-weight: bold;
+      color: #0066cc;
+    }
+    /* Стили для друзей */
+    .friend-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px;
+      border-bottom: 1px solid #ccc;
+    }
+    .friend-actions button {
+      width: auto;
+      margin-left: 6px;
+    }
   </style>
 </head>
 <body>
   <!-- Главная -->
   <div id="home" class="page active">
     <h2>Главная</h2>
-    <input id="video-url" placeholder="Вставь ссылку на видео">
-    <button onclick="loadVideo()">Смотреть</button>
-    <div id="player"></div>
+    <div id="auth-section">
+      <input id="username" placeholder="Ваше имя">
+      <input id="password" type="password" placeholder="Пароль">
+      <button onclick="login()">Войти</button>
+      <button onclick="register()">Регистрация</button>
+    </div>
+    <div id="video-section" style="display:none">
+      <input id="video-url" placeholder="Вставь ссылку на видео">
+      <button onclick="loadVideo()">Смотреть</button>
+      <div id="player"></div>
+      <div id="chat-container">
+        <h3>Чат просмотра</h3>
+        <div id="chat-messages"></div>
+        <input id="chat-input" placeholder="Ваше сообщение">
+        <button onclick="sendMessage()">Отправить</button>
+      </div>
+    </div>
   </div>
 
   <!-- Подписки -->
@@ -121,10 +171,20 @@
     <div id="channels"></div>
   </div>
 
+  <!-- Друзья -->
+  <div id="friends" class="page">
+    <h2>Друзья</h2>
+    <input id="friend-name" placeholder="Имя друга">
+    <button onclick="addFriend()">Добавить друга</button>
+    <div id="friends-list"></div>
+  </div>
+
   <!-- Профиль -->
   <div id="profile" class="page">
     <h2>Профиль</h2>
+    <div id="profile-info"></div>
     <button id="toggle-theme">🌙 Темная тема</button>
+    <button onclick="logout()">Выйти</button>
     <div class="card">
       <h3>История просмотров</h3>
       <div id="history-list"></div>
@@ -135,24 +195,196 @@
   <div id="tabs">
     <button onclick="showPage('home')">Главная</button>
     <button onclick="showPage('subs')">Подписки</button>
+    <button onclick="showPage('friends')">Друзья</button>
     <button onclick="showPage('profile')">Профиль</button>
   </div>
 
   <script>
   // Конфигурация
-  const API_INSTANCES = [
-    'https://vid.puffyan.us',
-    'https://invidious.flokinet.to',
-    'https://yt.artemislena.eu'
-  ];
+  const API_INSTANCES = ['https://vid.puffyan.us', 'https://invidious.flokinet.to'];
   const FALLBACK_THUMBNAIL = 'https://i.ytimg.com/vi/{id}/default.jpg';
 
-  // --- Переключение вкладок ---
-  function showPage(id) {
-    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-    document.getElementById(id).classList.add('active');
-    if (id === 'profile') renderHistory();
-    if (id === 'subs') renderChannels();
+  // Данные приложения
+  let currentUser = null;
+  let users = JSON.parse(localStorage.getItem('users') || {};
+  let channels = JSON.parse(localStorage.getItem("channels") || [];
+  let history = JSON.parse(localStorage.getItem("history") || []);
+  let currentVideoId = null;
+  let chatMessages = [];
+
+  // --- Аутентификация ---
+  function login() {
+    const username = document.getElementById('username').value.trim();
+    const password = document.getElementById('password').value;
+    
+    if (!username || !password) {
+      alert('Введите имя и пароль');
+      return;
+    }
+    
+    if (users[username] && users[username].password === password) {
+      currentUser = username;
+      updateUI();
+      showPage('home');
+    } else {
+      alert('Неверное имя пользователя или пароль');
+    }
+  }
+
+  function register() {
+    const username = document.getElementById('username').value.trim();
+    const password = document.getElementById('password').value;
+    
+    if (!username || !password) {
+      alert('Введите имя и пароль');
+      return;
+    }
+    
+    if (users[username]) {
+      alert('Пользователь уже существует');
+      return;
+    }
+    
+    users[username] = {
+      password: password,
+      friends: [],
+      watchedVideos: []
+    };
+    
+    localStorage.setItem('users', JSON.stringify(users));
+    currentUser = username;
+    updateUI();
+    alert('Регистрация успешна!');
+    showPage('home');
+  }
+
+  function logout() {
+    currentUser = null;
+    updateUI();
+    document.getElementById('username').value = '';
+    document.getElementById('password').value = '';
+  }
+
+  function updateUI() {
+    const authSection = document.getElementById('auth-section');
+    const videoSection = document.getElementById('video-section');
+    
+    if (currentUser) {
+      authSection.style.display = 'none';
+      videoSection.style.display = 'block';
+      document.getElementById('profile-info').innerHTML = `
+        <div class="card">
+          <h3>${currentUser}</h3>
+          <p>Друзей: ${users[currentUser].friends.length}</p>
+          <p>Просмотрено видео: ${users[currentUser].watchedVideos.length}</p>
+        </div>
+      `;
+    } else {
+      authSection.style.display = 'block';
+      videoSection.style.display = 'none';
+    }
+  }
+
+  // --- Друзья ---
+  function renderFriends() {
+    const container = document.getElementById('friends-list');
+    if (!currentUser) return;
+    
+    const friends = users[currentUser].friends;
+    container.innerHTML = '';
+    
+    if (friends.length === 0) {
+      container.innerHTML = '<div class="card">Нет друзей</div>';
+      return;
+    }
+    
+    friends.forEach(friend => {
+      const friendDiv = document.createElement('div');
+      friendDiv.className = 'card friend-item';
+      friendDiv.innerHTML = `
+        <span>${friend}</span>
+        <div class="friend-actions">
+          <button onclick="removeFriend('${friend}')">Удалить</button>
+          <button onclick="watchWithFriend('${friend}')">Смотреть вместе</button>
+        </div>
+      `;
+      container.appendChild(friendDiv);
+    });
+  }
+
+  function addFriend() {
+    if (!currentUser) {
+      alert('Войдите в аккаунт');
+      return;
+    }
+    
+    const friendName = document.getElementById('friend-name').value.trim();
+    if (!friendName) {
+      alert('Введите имя друга');
+      return;
+    }
+    
+    if (!users[friendName]) {
+      alert('Пользователь не найден');
+      return;
+    }
+    
+    if (users[currentUser].friends.includes(friendName)) {
+      alert('Этот пользователь уже у вас в друзьях');
+      return;
+    }
+    
+    users[currentUser].friends.push(friendName);
+    localStorage.setItem('users', JSON.stringify(users));
+    document.getElementById('friend-name').value = '';
+    renderFriends();
+  }
+
+  function removeFriend(friendName) {
+    if (!currentUser) return;
+    
+    users[currentUser].friends = users[currentUser].friends.filter(f => f !== friendName);
+    localStorage.setItem('users', JSON.stringify(users));
+    renderFriends();
+  }
+
+  function watchWithFriend(friendName) {
+    if (currentVideoId) {
+      alert(`Приглашение отправлено ${friendName} посмотреть видео вместе`);
+      // Здесь можно добавить реальную систему приглашений
+    } else {
+      alert('Сначала загрузите видео');
+    }
+  }
+
+  // --- Чат ---
+  function sendMessage() {
+    if (!currentUser || !currentVideoId) return;
+    
+    const input = document.getElementById('chat-input');
+    const message = input.value.trim();
+    if (!message) return;
+    
+    chatMessages.push({
+      author: currentUser,
+      text: message,
+      time: new Date().toLocaleTimeString()
+    });
+    
+    updateChat();
+    input.value = '';
+    localStorage.setItem(`chat_${currentVideoId}`, JSON.stringify(chatMessages));
+  }
+
+  function updateChat() {
+    const container = document.getElementById('chat-messages');
+    container.innerHTML = chatMessages.map(msg => `
+      <div class="message">
+        <span class="author">${msg.author}:</span> ${msg.text}
+        <span style="float:right;font-size:0.8em">${msg.time}</span>
+      </div>
+    `).join('');
+    container.scrollTop = container.scrollHeight;
   }
 
   // --- Плеер ---
@@ -169,12 +401,26 @@
     const url = document.getElementById("video-url").value.trim();
     const id = extractVideoId(url);
     if (id) {
+      currentVideoId = id;
       document.getElementById("player").innerHTML = `
         <iframe src="https://www.youtube.com/embed/${id}?autoplay=1" 
                 frameborder="0" 
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
                 allowfullscreen></iframe>`;
+      
       addToHistory(id, url);
+      
+      // Загружаем чат для этого видео
+      chatMessages = JSON.parse(localStorage.getItem(`chat_${id}`) || "[]");
+      updateChat();
+      
+      // Добавляем в просмотренные
+      if (currentUser) {
+        if (!users[currentUser].watchedVideos.includes(id)) {
+          users[currentUser].watchedVideos.push(id);
+          localStorage.setItem('users', JSON.stringify(users));
+        }
+      }
     } else {
       alert("Неверная ссылка на видео");
     }
@@ -187,8 +433,6 @@
   }
 
   // --- История просмотров ---
-  let history = JSON.parse(localStorage.getItem("history") || "[]");
-
   function addToHistory(videoId, url) {
     if (!history.some(item => item.id === videoId)) {
       history.unshift({
@@ -218,8 +462,6 @@
   }
 
   // --- Подписки ---
-  let channels = JSON.parse(localStorage.getItem("channels") || "[]");
-
   async function tryApiRequest(endpoint) {
     for (const instance of API_INSTANCES) {
       try {
@@ -233,7 +475,6 @@
   }
 
   async function getChannelInfo(identifier) {
-    // Если это @username
     if (identifier.startsWith('@')) {
       const data = await tryApiRequest(`/api/v1/search?q=${encodeURIComponent(identifier)}&type=channel`);
       if (data && data.length > 0) {
@@ -244,7 +485,6 @@
         };
       }
     }
-    // Если это channel ID
     else if (identifier.length === 24 && identifier.startsWith('UC')) {
       const data = await tryApiRequest(`/api/v1/channels/${identifier}`);
       if (data) {
@@ -329,10 +569,9 @@
       return;
     }
 
-    // Извлекаем @username из разных форматов ссылок
     let channelId;
     if (identifier.startsWith('@')) {
-      channelId = identifier.split(/[\/\?]/)[0]; // Берем часть до / или ?
+      channelId = identifier.split(/[\/\?]/)[0];
     } 
     else if (identifier.includes('youtube.com')) {
       if (identifier.includes('/@')) {
@@ -343,7 +582,7 @@
       }
     }
     else if (identifier.startsWith('UC') && identifier.length === 24) {
-      channelId = identifier; // Уже channel ID
+      channelId = identifier;
     }
 
     if (!channelId) {
@@ -392,15 +631,25 @@
 
   // --- Инициализация ---
   applyTheme();
-  document.addEventListener('DOMContentLoaded', () => {
-    // Загружаем подписки при первом открытии вкладки
-    document.getElementById('subs').addEventListener('animationend', renderChannels);
+  
+  // Загружаем данные при открытии вкладок
+  document.getElementById('subs').addEventListener('animationend', renderChannels);
+  document.getElementById('friends').addEventListener('animationend', renderFriends);
+  document.getElementById('profile').addEventListener('animationend', function() {
+    renderHistory();
+    updateUI();
   });
 
   // Горячие клавиши
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && document.getElementById('home').classList.contains('active')) {
-      loadVideo();
+    if (e.key === 'Enter') {
+      if (document.getElementById('home').classList.contains('active')) {
+        if (document.getElementById('chat-input').matches(':focus')) {
+          sendMessage();
+        } else {
+          loadVideo();
+        }
+      }
     }
   });
   </script>
