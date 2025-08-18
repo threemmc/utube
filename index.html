@@ -139,11 +139,11 @@
   </div>
 
   <script>
-  // Конфигурация
+  // Конфигурация Piped API
   const API_INSTANCES = [
-    'https://vid.puffyan.us',
-    'https://invidious.flokinet.to',
-    'https://yt.artemislena.eu'
+    'https://pipedapi.kavin.rocks',
+    'https://piped-api.garudalinux.org',
+    'https://pipedapi-libre.kavin.rocks'
   ];
   const FALLBACK_THUMBNAIL = 'https://i.ytimg.com/vi/{id}/default.jpg';
 
@@ -235,23 +235,23 @@
   async function getChannelInfo(identifier) {
     // Если это @username
     if (identifier.startsWith('@')) {
-      const data = await tryApiRequest(`/api/v1/search?q=${encodeURIComponent(identifier)}&type=channel`);
-      if (data && data.length > 0) {
+      const data = await tryApiRequest(`/search?q=${encodeURIComponent(identifier)}&filter=channels`);
+      if (data && data.items && data.items.length > 0) {
         return {
-          id: data[0].authorId,
-          name: data[0].author,
-          thumb: data[0].authorThumbnails?.[2]?.url
+          id: data.items[0].url.split('/channel/')[1],
+          name: data.items[0].name,
+          thumb: data.items[0].thumbnail
         };
       }
     }
     // Если это channel ID
     else if (identifier.length === 24 && identifier.startsWith('UC')) {
-      const data = await tryApiRequest(`/api/v1/channels/${identifier}`);
+      const data = await tryApiRequest(`/channel/${identifier}`);
       if (data) {
         return {
           id: identifier,
-          name: data.author,
-          thumb: data.authorThumbnails?.[2]?.url
+          name: data.name,
+          thumb: data.avatarUrl
         };
       }
     }
@@ -259,8 +259,8 @@
   }
 
   async function getChannelVideos(channelId) {
-    const data = await tryApiRequest(`/api/v1/channels/${channelId}/videos`);
-    return data?.videos || [];
+    const data = await tryApiRequest(`/channel/${channelId}`);
+    return data?.relatedStreams || [];
   }
 
   async function renderChannels() {
@@ -296,8 +296,8 @@
             </h3>
             <div>
               ${videos.slice(0, 3).map(video => `
-                <div class="video-item" onclick="loadVideoById('${video.videoId}')">
-                  <img src="${video.videoThumbnails?.[0]?.url || FALLBACK_THUMBNAIL.replace('{id}', video.videoId)}" 
+                <div class="video-item" onclick="loadVideoById('${video.url.split('v=')[1]}')">
+                  <img src="${video.thumbnail || FALLBACK_THUMBNAIL.replace('{id}', video.url.split('v=')[1])}" 
                        width="120">
                   <span>${video.title}</span>
                 </div>
@@ -329,7 +329,7 @@
       return;
     }
 
-    // Извлекаем @username из разных форматов ссылок
+    // Извлекаем @username или channel ID из разных форматов ссылок
     let channelId;
     if (identifier.startsWith('@')) {
       channelId = identifier.split(/[\/\?]/)[0]; // Берем часть до / или ?
