@@ -31,7 +31,6 @@
       animation: fade 0.3s;
       box-sizing: border-box;
       max-width: 100%;
-      padding-bottom: 60px; /* Для нижнего меню */
     }
     .active { display: block; }
     @keyframes fade {
@@ -67,7 +66,6 @@
       display: flex;
       background: var(--card);
       border-top: 1px solid #ccc;
-      z-index: 100;
     }
     #tabs button {
       flex: 1;
@@ -102,28 +100,6 @@
       text-align: center;
       padding: 20px;
     }
-    .loading-spinner {
-      border: 4px solid rgba(0, 0, 0, 0.1);
-      border-radius: 50%;
-      border-top: 4px solid #3498db;
-      width: 30px;
-      height: 30px;
-      animation: spin 1s linear infinite;
-      margin: 0 auto;
-    }
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-    .error-message {
-      color: red;
-      margin: 10px 0;
-    }
-    .channel-header {
-      display: flex;
-      align-items: center;
-      margin-bottom: 10px;
-    }
   </style>
 </head>
 <body>
@@ -143,9 +119,6 @@
     <button onclick="renderChannels()">Обновить</button>
     <button onclick="sortChannels()">Сортировать</button>
     <div id="channels"></div>
-    <div id="load-more-container" style="text-align: center; margin: 10px 0;">
-      <button id="load-more" onclick="loadMoreChannels()" style="display: none;">Загрузить еще</button>
-    </div>
   </div>
 
   <!-- Профиль -->
@@ -173,28 +146,13 @@
     'https://yt.artemislena.eu'
   ];
   const FALLBACK_THUMBNAIL = 'https://i.ytimg.com/vi/{id}/default.jpg';
-  const CHANNELS_PER_PAGE = 3;
-  const API_TIMEOUT = 10000; // 10 секунд
-
-  // Кэш данных
-  const channelCache = new Map();
-  const videosCache = new Map();
-
-  // Состояние приложения
-  let currentPage = 0;
-  let isLoading = false;
-  let channels = JSON.parse(localStorage.getItem("channels") || [];
-  let history = JSON.parse(localStorage.getItem("history") || "[]");
 
   // --- Переключение вкладок ---
   function showPage(id) {
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     document.getElementById(id).classList.add('active');
     if (id === 'profile') renderHistory();
-    if (id === 'subs') {
-      currentPage = 0;
-      renderChannels();
-    }
+    if (id === 'subs') renderChannels();
   }
 
   // --- Плеер ---
@@ -229,6 +187,8 @@
   }
 
   // --- История просмотров ---
+  let history = JSON.parse(localStorage.getItem("history") || "[]");
+
   function addToHistory(videoId, url) {
     if (!history.some(item => item.id === videoId)) {
       history.unshift({
@@ -258,18 +218,12 @@
   }
 
   // --- Подписки ---
+  let channels = JSON.parse(localStorage.getItem("channels") || "[]");
+
   async function tryApiRequest(endpoint) {
     for (const instance of API_INSTANCES) {
       try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT);
-        
-        const response = await fetch(`${instance}${endpoint}`, {
-          signal: controller.signal
-        });
-        
-        clearTimeout(timeoutId);
-        
+        const response = await fetch(`${instance}${endpoint}`);
         if (response.ok) return await response.json();
       } catch (e) {
         console.error(`Ошибка на инстансе ${instance}:`, e);
@@ -279,18 +233,11 @@
   }
 
   async function getChannelInfo(identifier) {
-    // Проверяем кэш
-    if (channelCache.has(identifier)) {
-      return channelCache.get(identifier);
-    }
-
-    let channelData = null;
-    
     // Если это @username
     if (identifier.startsWith('@')) {
       const data = await tryApiRequest(`/api/v1/search?q=${encodeURIComponent(identifier)}&type=channel`);
       if (data && data.length > 0) {
-        channelData = {
+        return {
           id: data[0].authorId,
           name: data[0].author,
           thumb: data[0].authorThumbnails?.[2]?.url
@@ -301,161 +248,75 @@
     else if (identifier.length === 24 && identifier.startsWith('UC')) {
       const data = await tryApiRequest(`/api/v1/channels/${identifier}`);
       if (data) {
-        channelData = {
+        return {
           id: identifier,
           name: data.author,
           thumb: data.authorThumbnails?.[2]?.url
         };
       }
     }
-
-    // Сохраняем в кэш
-    if (channelData) {
-      channelCache.set(identifier, channelData);
-      // Очищаем кэш через 1 час
-      setTimeout(() => channelCache.delete(identifier), 3600000);
-    }
-
-    return channelData;
+    return null;
   }
 
   async function getChannelVideos(channelId) {
-    // Проверяем кэш
-    if (videosCache.has(channelId)) {
-      return videosCache.get(channelId);
-    }
-
     const data = await tryApiRequest(`/api/v1/channels/${channelId}/videos`);
-    const videos = data?.videos || [];
-
-    // Сохраняем в кэш
-    if (videos.length > 0) {
-      videosCache.set(channelId, videos);
-      // Очищаем кэш через 30 минут
-      setTimeout(() => videosCache.delete(channelId), 1800000);
-    }
-
-    return videos;
-  }
-
-  async function renderChannelCard(channelId) {
-    try {
-      const channelInfo = await getChannelInfo(channelId);
-      if (!channelInfo) return null;
-
-      const videos = await getChannelVideos(channelInfo.id);
-      if (videos.length === 0) return null;
-
-      return `
-        <div class="card" data-channel="${channelId}">
-          <div class="channel-header">
-            <img src="${channelInfo.thumb || FALLBACK_THUMBNAIL.replace('{id}', 'channel')}" 
-                 width="24" 
-                 height="24" 
-                 style="border-radius:50%;margin-right:8px;">
-            <h3 style="flex-grow:1;margin:0;">${channelInfo.name}</h3>
-            <span class="delete-btn" onclick="deleteChannel('${channelId}')">❌</span>
-          </div>
-          <div>
-            ${videos.slice(0, 3).map(video => `
-              <div class="video-item" onclick="loadVideoById('${video.videoId}')">
-                <img src="${video.videoThumbnails?.[0]?.url || FALLBACK_THUMBNAIL.replace('{id}', video.videoId)}" 
-                     width="120">
-                <span>${video.title}</span>
-              </div>
-            `).join('')}
-          </div>
-        </div>`;
-    } catch (e) {
-      console.error(`Ошибка рендеринга канала ${channelId}:`, e);
-      return null;
-    }
+    return data?.videos || [];
   }
 
   async function renderChannels() {
-    if (isLoading) return;
-    isLoading = true;
-
     const box = document.getElementById("channels");
-    const loadMoreBtn = document.getElementById("load-more");
-    
-    // Показываем индикатор загрузки только при первой загрузке
-    if (currentPage === 0) {
-      box.innerHTML = `
-        <div class="card loading">
-          <div class="loading-spinner"></div>
-          <p>Загрузка подписок...</p>
-        </div>
-      `;
-    }
+    box.innerHTML = "<div class='card loading'>Загрузка подписок...</div>";
 
     if (channels.length === 0) {
       box.innerHTML = "<div class='card'>Добавьте каналы, чтобы видеть их видео</div>";
-      loadMoreBtn.style.display = 'none';
-      isLoading = false;
       return;
     }
 
     try {
-      const start = currentPage * CHANNELS_PER_PAGE;
-      const end = start + CHANNELS_PER_PAGE;
-      const channelsToLoad = channels.slice(start, end);
+      let html = '';
+      let loadedChannels = 0;
 
-      if (channelsToLoad.length === 0) {
-        loadMoreBtn.style.display = 'none';
-        isLoading = false;
-        return;
-      }
+      for (const channel of channels) {
+        const channelInfo = await getChannelInfo(channel);
+        if (!channelInfo) continue;
 
-      // Создаем промисы для загрузки каналов
-      const channelCards = await Promise.all(channelsToLoad.map(renderChannelCard));
-      const validCards = channelCards.filter(Boolean);
+        const videos = await getChannelVideos(channelInfo.id);
+        if (videos.length === 0) continue;
 
-      if (currentPage === 0) {
-        box.innerHTML = validCards.join('');
-      } else {
-        box.innerHTML += validCards.join('');
-      }
-
-      // Показываем кнопку "Загрузить еще", если есть что загружать
-      if (end < channels.length) {
-        loadMoreBtn.style.display = 'block';
-      } else {
-        loadMoreBtn.style.display = 'none';
-      }
-
-      // Если ничего не загрузилось при первой попытке
-      if (currentPage === 0 && validCards.length === 0) {
-        box.innerHTML = `
+        loadedChannels++;
+        html += `
           <div class="card">
-            <p class="error-message">Не удалось загрузить видео. Возможные причины:</p>
-            <ul>
-              <li>Проблемы с подключением к интернету</li>
-              <li>Все Invidious инстансы перегружены</li>
-              <li>Каналы стали приватными</li>
-            </ul>
-            <button onclick="renderChannels()">Попробовать снова</button>
-          </div>
-        `;
+            <h3>
+              <img src="${channelInfo.thumb || FALLBACK_THUMBNAIL.replace('{id}', 'channel')}" 
+                   width="24" 
+                   height="24" 
+                   style="border-radius:50%;vertical-align:middle;margin-right:8px;">
+              ${channelInfo.name}
+              <span class="delete-btn" onclick="deleteChannel('${channel}')">❌</span>
+            </h3>
+            <div>
+              ${videos.slice(0, 3).map(video => `
+                <div class="video-item" onclick="loadVideoById('${video.videoId}')">
+                  <img src="${video.videoThumbnails?.[0]?.url || FALLBACK_THUMBNAIL.replace('{id}', video.videoId)}" 
+                       width="120">
+                  <span>${video.title}</span>
+                </div>
+              `).join('')}
+            </div>
+          </div>`;
       }
 
-      currentPage++;
+      box.innerHTML = loadedChannels > 0 
+        ? html 
+        : "<div class='card'>Не удалось загрузить видео. Попробуйте позже.</div>";
     } catch (e) {
       console.error("Ошибка рендеринга:", e);
       box.innerHTML = `
         <div class="card">
-          <p class="error-message">Произошла ошибка при загрузке</p>
+          <p>Произошла ошибка при загрузке</p>
           <button onclick="renderChannels()">Попробовать снова</button>
         </div>
       `;
-    } finally {
-      isLoading = false;
-    }
-  }
-
-  function loadMoreChannels() {
-    if (!isLoading) {
-      renderChannels();
     }
   }
 
@@ -468,7 +329,7 @@
       return;
     }
 
-    // Извлекаем @username или channel ID из разных форматов ссылок
+    // Извлекаем @username из разных форматов ссылок
     let channelId;
     if (identifier.startsWith('@')) {
       channelId = identifier.split(/[\/\?]/)[0]; // Берем часть до / или ?
@@ -494,7 +355,6 @@
       channels.push(channelId);
       localStorage.setItem("channels", JSON.stringify(channels));
       input.value = "";
-      currentPage = 0;
       renderChannels();
     } else {
       alert("Этот канал уже добавлен");
@@ -505,11 +365,6 @@
     if (confirm(`Удалить канал ${channelId} из подписок?`)) {
       channels = channels.filter(ch => ch !== channelId);
       localStorage.setItem("channels", JSON.stringify(channels));
-      // Удаляем из кэша
-      channelCache.delete(channelId);
-      videosCache.delete(channelId);
-      // Перерисовываем
-      currentPage = 0;
       renderChannels();
     }
   }
@@ -517,7 +372,6 @@
   function sortChannels() {
     channels.sort((a, b) => a.localeCompare(b));
     localStorage.setItem("channels", JSON.stringify(channels));
-    currentPage = 0;
     renderChannels();
   }
 
@@ -540,10 +394,7 @@
   applyTheme();
   document.addEventListener('DOMContentLoaded', () => {
     // Загружаем подписки при первом открытии вкладки
-    document.getElementById('subs').addEventListener('animationend', () => {
-      currentPage = 0;
-      renderChannels();
-    });
+    document.getElementById('subs').addEventListener('animationend', renderChannels);
   });
 
   // Горячие клавиши
