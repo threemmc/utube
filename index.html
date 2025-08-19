@@ -72,10 +72,16 @@
       padding: 12px;
       border-radius: 0;
     }
-    iframe {
+    .video-wrapper {
+      position: relative;
       width: 100%;
-      max-width: 100%;
-      height: 220px;
+      padding-top: 56.25%; /* 16:9 */
+    }
+    iframe {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%;
+      height: 100%;
       border-radius: 8px;
     }
     .delete-btn {
@@ -139,13 +145,13 @@
   </div>
 
   <script>
-  // Конфигурация Piped API
+  // --- Конфигурация ---
   const API_INSTANCES = [
     'https://pipedapi.kavin.rocks',
     'https://piped-api.garudalinux.org',
     'https://pipedapi-libre.kavin.rocks'
   ];
-  const FALLBACK_THUMBNAIL = 'https://i.ytimg.com/vi/{id}/default.jpg';
+  const FALLBACK_THUMBNAIL = 'https://i.ytimg.com/vi/{id}/hqdefault.jpg';
 
   // --- Переключение вкладок ---
   function showPage(id) {
@@ -165,16 +171,24 @@
     return null;
   }
 
-  function loadVideo() {
+  async function fetchVideoInfo(id) {
+    const data = await tryApiRequest(`/streams/${id}`);
+    return data ? data.title : `Видео ${id}`;
+  }
+
+  async function loadVideo() {
     const url = document.getElementById("video-url").value.trim();
     const id = extractVideoId(url);
     if (id) {
       document.getElementById("player").innerHTML = `
-        <iframe src="https://www.youtube.com/embed/${id}?autoplay=1" 
-                frameborder="0" 
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-                allowfullscreen></iframe>`;
-      addToHistory(id, url);
+        <div class="video-wrapper">
+          <iframe src="https://www.youtube.com/embed/${id}?autoplay=1" 
+                  frameborder="0" 
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                  allowfullscreen></iframe>
+        </div>`;
+      const title = await fetchVideoInfo(id);
+      addToHistory(id, url, title);
     } else {
       alert("Неверная ссылка на видео");
     }
@@ -189,12 +203,12 @@
   // --- История просмотров ---
   let history = JSON.parse(localStorage.getItem("history") || "[]");
 
-  function addToHistory(videoId, url) {
+  function addToHistory(videoId, url, title) {
     if (!history.some(item => item.id === videoId)) {
       history.unshift({
         id: videoId,
         url: url,
-        title: `Видео ${videoId}`,
+        title: title,
         date: new Date().toLocaleString()
       });
       history = history.slice(0, 50);
@@ -211,7 +225,7 @@
 
     container.innerHTML = history.map(item => `
       <div class="video-item" onclick="loadVideoById('${item.id}')">
-        <img src="${FALLBACK_THUMBNAIL.replace('{id}', item.id)}" width="60">
+        <img src="${FALLBACK_THUMBNAIL.replace('{id}', item.id)}" width="80">
         <span>${item.title}</span>
       </div>
     `).join('');
@@ -302,21 +316,27 @@
     let html = "";
     for (const ch of channels) {
       const vids = await getChannelVideos(ch.id);
-      if (!vids.length) continue;
+      if (!vids.length) {
+        console.error("Не удалось загрузить видео канала", ch.id);
+        continue;
+      }
 
       html += `
         <div class="card">
           <h3>
             <img src="${ch.thumb}" width="24" height="24" style="border-radius:50%;vertical-align:middle;margin-right:8px;">
             ${ch.name}
-            <span class="delete-btn" onclick="deleteChannel('${ch.id}')">❌</span>
+            <span class="delete-btn" onclick="event.stopPropagation(); deleteChannel('${ch.id}')">❌</span>
           </h3>
-          ${vids.slice(0,3).map(v => `
-            <div class="video-item" onclick="loadVideoById('${v.url.split('v=')[1]}')">
-              <img src="${v.thumbnail}" width="120">
-              <span>${v.title}</span>
-            </div>
-          `).join("")}
+          ${vids.slice(0,3).map(v => {
+            const id = extractVideoId(v.url) || "";
+            return `
+              <div class="video-item" onclick="loadVideoById('${id}')">
+                <img src="${v.thumbnail}" width="120">
+                <span>${v.title}</span>
+              </div>
+            `;
+          }).join("")}
         </div>`;
     }
     box.innerHTML = html || "<div class='card'>Не удалось загрузить видео</div>";
