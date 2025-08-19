@@ -3,19 +3,26 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>YouTube</title>
+  <title>YouTube Lite</title>
   <style>
     body {
       margin: 0;
       font-family: sans-serif;
       background: #111;
       color: #fff;
+      padding-bottom: 60px; /* чтобы контент не залезал под док-бар */
     }
+    /* нижний док-бар */
     header {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
       background: #222;
       padding: 10px;
       display: flex;
       justify-content: space-around;
+      z-index: 100;
     }
     header button {
       flex: 1;
@@ -31,10 +38,10 @@
     header button.active {
       background: #555;
     }
+
     .page { display: none; padding: 15px; }
     .page.active { display: block; }
 
-    /* одинаковые стили для input и кнопок */
     input, .btn {
       width: 100%;
       padding: 12px;
@@ -62,12 +69,6 @@
   </style>
 </head>
 <body>
-  <header>
-    <button onclick="showPage('home')" class="active">Главная</button>
-    <button onclick="showPage('subs')">Подписки</button>
-    <button onclick="showPage('profile')">Профиль</button>
-  </header>
-
   <div id="home" class="page active">
     <h2>Главная</h2>
     <div id="home-videos"></div>
@@ -85,6 +86,13 @@
     <h2>Профиль</h2>
     <p>Тут будет инфо.</p>
   </div>
+
+  <!-- док-бар внизу -->
+  <header>
+    <button onclick="showPage('home')" class="active">Главная</button>
+    <button onclick="showPage('subs')">Подписки</button>
+    <button onclick="showPage('profile')">Профиль</button>
+  </header>
 
 <script>
 const API_KEY = "YOUR_API_KEY"; // вставь сюда свой ключ
@@ -120,13 +128,13 @@ async function addChannel() {
 
   let channelId = null;
 
-  // если ссылка
+  // если ссылка формата /channel/...
   if (input.includes("channel/")) {
     channelId = input.split("channel/")[1].split(/[/?]/)[0];
   }
-  // если @username
-  else if (input.startsWith("@")) {
-    let username = input.slice(1);
+  // если @username или ссылка вида youtube.com/@username
+  else if (input.includes("@")) {
+    let username = input.split("@")[1].split(/[/?]/)[0];
     let res = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&type=channel&q=${username}&key=${API_KEY}`);
     let data = await res.json();
     if (data.items && data.items.length > 0) {
@@ -135,9 +143,11 @@ async function addChannel() {
   }
 
   if (channelId) {
-    subscriptions.push(channelId);
-    localStorage.setItem("subs", JSON.stringify(subscriptions));
-    loadSubscriptions();
+    if (!subscriptions.includes(channelId)) {
+      subscriptions.push(channelId);
+      localStorage.setItem("subs", JSON.stringify(subscriptions));
+      loadSubscriptions();
+    }
   } else {
     alert("Не удалось найти канал");
   }
