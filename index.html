@@ -5,373 +5,149 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Мой YouTube</title>
   <style>
-    :root {
-      --bg: #fff;
-      --text: #222;
-      --card: #f5f5f5;
-      --button: #e0e0e0;
-    }
-    body.dark {
-      --bg: #121212;
-      --text: #eee;
-      --card: #1e1e1e;
-      --button: #2a2a2a;
-    }
     body {
-      margin: 0; padding: 0;
-      background: var(--bg);
-      color: var(--text);
+      margin:0;
       font-family: sans-serif;
-      overflow-x: hidden;
-      transition: background 0.3s, color 0.3s;
+      background:#111;
+      color:#eee;
     }
-    .page {
-      display: none;
-      padding: 16px;
-      animation: fade 0.3s;
-      box-sizing: border-box;
-      max-width: 100%;
+    header {
+      display:flex;
+      justify-content:space-around;
+      background:#222;
+      padding:10px;
+      position:fixed;
+      bottom:0;
+      width:100%;
     }
-    .active { display: block; }
-    @keyframes fade {
-      from { opacity: 0; }
-      to { opacity: 1; }
+    header button {
+      background:none;
+      border:none;
+      color:#eee;
+      font-size:16px;
     }
-    .card {
-      background: var(--card);
-      padding: 12px;
-      margin: 8px 0;
-      border-radius: 8px;
+    .page { display:none; padding:20px; padding-bottom:70px;}
+    .active { display:block; }
+    .video {
+      background:#222;
+      margin:10px 0;
+      padding:10px;
+      border-radius:8px;
+      cursor:pointer;
     }
-    input, button {
-      padding: 8px;
-      margin: 4px 0;
-      border: none;
-      border-radius: 6px;
-      width: 100%;
-      max-width: 400px;
-      box-sizing: border-box;
-    }
-    button {
-      background: var(--button);
-      font-weight: bold;
-      cursor: pointer;
-    }
-    button:hover { opacity: 0.8; }
-    #tabs {
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      width: 100%;
-      display: flex;
-      background: var(--card);
-      border-top: 1px solid #ccc;
-    }
-    #tabs button {
-      flex: 1;
-      padding: 12px;
-      border-radius: 0;
-    }
-    .video-wrapper {
-      position: relative;
-      width: 100%;
-      padding-top: 56.25%; /* 16:9 */
-    }
-    iframe {
-      position: absolute;
-      top: 0; left: 0;
-      width: 100%;
-      height: 100%;
-      border-radius: 8px;
-    }
-    .delete-btn {
-      float: right;
-      cursor: pointer;
-      color: red;
-    }
-    .video-item {
-      display: flex;
-      align-items: center;
-      margin: 8px 0;
-      cursor: pointer;
-    }
-    .video-item img {
-      margin-right: 10px;
-      border-radius: 4px;
-    }
-    .video-item:hover {
-      opacity: 0.8;
-    }
-    .loading {
-      text-align: center;
-      padding: 20px;
-    }
+    iframe { width:100%; border:none; border-radius:8px; }
+    .subs-input { width:100%; padding:8px; margin:10px 0; border-radius:5px; border:1px solid #444; background:#111; color:#eee;}
+    .btn { display:block; width:100%; margin:5px 0; padding:10px; background:#333; border:none; border-radius:5px; color:#eee; }
   </style>
 </head>
 <body>
-  <!-- Главная -->
-  <div id="home" class="page active">
-    <h2>Главная</h2>
-    <input id="video-url" placeholder="Вставь ссылку на видео">
-    <button onclick="loadVideo()">Смотреть</button>
-    <div id="player"></div>
-  </div>
 
-  <!-- Подписки -->
-  <div id="subs" class="page">
-    <h2>Подписки</h2>
-    <input id="channel-url" placeholder="Вставь @username или ссылку на канал">
-    <button onclick="addChannel()">Добавить канал</button>
-    <button onclick="renderChannels()">Обновить</button>
-    <button onclick="sortChannels()">Сортировать</button>
-    <div id="channels"></div>
-  </div>
+<div id="home" class="page active">
+  <h2>Главная</h2>
+  <div id="home-videos"></div>
+</div>
 
-  <!-- Профиль -->
-  <div id="profile" class="page">
-    <h2>Профиль</h2>
-    <button id="toggle-theme">🌙 Темная тема</button>
-    <div class="card">
-      <h3>История просмотров</h3>
-      <div id="history-list"></div>
-    </div>
-  </div>
+<div id="subs" class="page">
+  <h2>Подписки</h2>
+  <input id="subInput" class="subs-input" placeholder="Ссылка или @username">
+  <button class="btn" onclick="addChannel()">Добавить канал</button>
+  <button class="btn" onclick="loadSubscriptions()">Обновить</button>
+  <div id="subs-list"></div>
+</div>
 
-  <!-- Нижнее меню -->
-  <div id="tabs">
-    <button onclick="showPage('home')">Главная</button>
-    <button onclick="showPage('subs')">Подписки</button>
-    <button onclick="showPage('profile')">Профиль</button>
-  </div>
+<div id="profile" class="page">
+  <h2>Профиль</h2>
+  <p>Тут будет инфа</p>
+</div>
 
-  <script>
-  // --- Конфигурация ---
-  const API_INSTANCES = [
-    'https://pipedapi.kavin.rocks',
-    'https://piped-api.garudalinux.org',
-    'https://pipedapi-libre.kavin.rocks'
-  ];
-  const FALLBACK_THUMBNAIL = 'https://i.ytimg.com/vi/{id}/hqdefault.jpg';
+<header>
+  <button onclick="openPage('home')">Главная</button>
+  <button onclick="openPage('subs')">Подписки</button>
+  <button onclick="openPage('profile')">Профиль</button>
+</header>
 
-  // --- Переключение вкладок ---
-  function showPage(id) {
-    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-    document.getElementById(id).classList.add('active');
-    if (id === 'profile') renderHistory();
-    if (id === 'subs') renderChannels();
-  }
+<script>
+const API = "https://pipedapi.kavin.rocks";
 
-  // --- Плеер ---
-  function extractVideoId(url) {
-    if (!url) return null;
-    if (url.includes("youtu.be/")) return url.split("youtu.be/")[1].split("?")[0];
-    if (url.includes("watch?v=")) return url.split("v=")[1].split("&")[0];
-    if (url.includes("shorts/")) return url.split("shorts/")[1].split("?")[0];
-    if (url.length === 11) return url;
-    return null;
-  }
+function openPage(id){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
 
-  async function fetchVideoInfo(id) {
-    const data = await tryApiRequest(`/streams/${id}`);
-    return data ? data.title : `Видео ${id}`;
-  }
-
-  async function loadVideo() {
-    const url = document.getElementById("video-url").value.trim();
-    const id = extractVideoId(url);
-    if (id) {
-      document.getElementById("player").innerHTML = `
-        <div class="video-wrapper">
-          <iframe src="https://www.youtube.com/embed/${id}?autoplay=1" 
-                  frameborder="0" 
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-                  allowfullscreen></iframe>
-        </div>`;
-      const title = await fetchVideoInfo(id);
-      addToHistory(id, url, title);
-    } else {
-      alert("Неверная ссылка на видео");
-    }
-  }
-
-  function loadVideoById(videoId) {
-    document.getElementById("video-url").value = `https://youtu.be/${videoId}`;
-    loadVideo();
-    showPage('home');
-  }
-
-  // --- История просмотров ---
-  let history = JSON.parse(localStorage.getItem("history") || "[]");
-
-  function addToHistory(videoId, url, title) {
-    if (!history.some(item => item.id === videoId)) {
-      history.unshift({
-        id: videoId,
-        url: url,
-        title: title,
-        date: new Date().toLocaleString()
-      });
-      history = history.slice(0, 50);
-      localStorage.setItem("history", JSON.stringify(history));
-    }
-  }
-
-  function renderHistory() {
-    const container = document.getElementById("history-list");
-    if (history.length === 0) {
-      container.innerHTML = "<div>История пуста</div>";
-      return;
-    }
-
-    container.innerHTML = history.map(item => `
-      <div class="video-item" onclick="loadVideoById('${item.id}')">
-        <img src="${FALLBACK_THUMBNAIL.replace('{id}', item.id)}" width="80">
-        <span>${item.title}</span>
+// загрузка популярных видео
+async function loadHome(){
+  let r = await fetch(`${API}/trending`);
+  let data = await r.json();
+  let wrap = document.getElementById("home-videos");
+  wrap.innerHTML = "";
+  data.forEach(v=>{
+    wrap.innerHTML += `
+      <div class="video" onclick="playVideo('${v.url.split('v=')[1]}')">
+        <img src="${v.thumbnail}" width="100%">
+        <p>${v.title}</p>
       </div>
-    `).join('');
-  }
-
-  // --- Подписки ---
-  let channels = JSON.parse(localStorage.getItem("channels") || "[]");
-
-  async function tryApiRequest(endpoint) {
-    for (const instance of API_INSTANCES) {
-      try {
-        const response = await fetch(`${instance}${endpoint}`);
-        if (response.ok) return await response.json();
-      } catch (e) {
-        console.warn(`Ошибка инстанса ${instance}`, e);
-      }
-    }
-    return null;
-  }
-
-  async function fetchChannel(identifier) {
-    if (identifier.startsWith('@')) {
-      const data = await tryApiRequest(`/search?q=${encodeURIComponent(identifier)}&filter=channels`);
-      if (data?.items?.length) {
-        return {
-          id: data.items[0].url.split('/channel/')[1],
-          name: data.items[0].name,
-          thumb: data.items[0].thumbnail
-        };
-      }
-    }
-    if (identifier.startsWith("UC") && identifier.length === 24) {
-      const data = await tryApiRequest(`/channel/${identifier}`);
-      if (data) {
-        return {
-          id: identifier,
-          name: data.name,
-          thumb: data.avatarUrl
-        };
-      }
-    }
-    return null;
-  }
-
-  async function addChannel() {
-    const input = document.getElementById("channel-url");
-    let val = input.value.trim();
-    if (!val) return alert("Введите @username или ссылку на канал");
-
-    if (val.includes("youtube.com")) {
-      if (val.includes("/@")) val = "@" + val.split("/@")[1].split("/")[0];
-      if (val.includes("/channel/")) val = val.split("/channel/")[1].split("/")[0];
-    }
-
-    const info = await fetchChannel(val);
-    if (!info) return alert("Не удалось найти канал");
-
-    if (channels.some(c => c.id === info.id)) {
-      alert("Канал уже есть");
-    } else {
-      channels.push(info);
-      localStorage.setItem("channels", JSON.stringify(channels));
-      renderChannels();
-    }
-    input.value = "";
-  }
-
-  function deleteChannel(id) {
-    if (!confirm("Удалить канал?")) return;
-    channels = channels.filter(c => c.id !== id);
-    localStorage.setItem("channels", JSON.stringify(channels));
-    renderChannels();
-  }
-
-  async function getChannelVideos(channelId) {
-    const data = await tryApiRequest(`/channel/${channelId}`);
-    return data?.relatedStreams || [];
-  }
-
-  async function renderChannels() {
-    const box = document.getElementById("channels");
-    if (!channels.length) {
-      box.innerHTML = "<div class='card'>Нет подписок</div>";
-      return;
-    }
-    box.innerHTML = "<div class='loading'>Загрузка...</div>";
-
-    let html = "";
-    for (const ch of channels) {
-      const vids = await getChannelVideos(ch.id);
-      if (!vids.length) {
-        console.error("Не удалось загрузить видео канала", ch.id);
-        continue;
-      }
-
-      html += `
-        <div class="card">
-          <h3>
-            <img src="${ch.thumb}" width="24" height="24" style="border-radius:50%;vertical-align:middle;margin-right:8px;">
-            ${ch.name}
-            <span class="delete-btn" onclick="event.stopPropagation(); deleteChannel('${ch.id}')">❌</span>
-          </h3>
-          ${vids.slice(0,3).map(v => {
-            const id = extractVideoId(v.url) || "";
-            return `
-              <div class="video-item" onclick="loadVideoById('${id}')">
-                <img src="${v.thumbnail}" width="120">
-                <span>${v.title}</span>
-              </div>
-            `;
-          }).join("")}
-        </div>`;
-    }
-    box.innerHTML = html || "<div class='card'>Не удалось загрузить видео</div>";
-  }
-
-  function sortChannels() {
-    channels.sort((a, b) => a.name.localeCompare(b.name));
-    localStorage.setItem("channels", JSON.stringify(channels));
-    renderChannels();
-  }
-
-  // --- Тема ---
-  function applyTheme() {
-    const theme = localStorage.getItem('theme') || 'light';
-    document.body.classList.toggle('dark', theme === 'dark');
-    document.getElementById('toggle-theme').textContent = 
-      theme === 'dark' ? '☀️ Светлая тема' : '🌙 Темная тема';
-  }
-
-  document.getElementById('toggle-theme').onclick = () => {
-    const isDark = document.body.classList.toggle('dark');
-    localStorage.setItem('theme', isDark ? 'dark' : 'light');
-    document.getElementById('toggle-theme').textContent = 
-      isDark ? '☀️ Светлая тема' : '🌙 Темная тема';
-  };
-
-  // --- Инициализация ---
-  applyTheme();
-
-  // Горячие клавиши
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && document.getElementById('home').classList.contains('active')) {
-      loadVideo();
-    }
+    `;
   });
-  </script>
+}
+loadHome();
+
+function playVideo(id){
+  let w = document.createElement("div");
+  w.innerHTML = `<iframe src="https://www.youtube.com/embed/${id}" allowfullscreen></iframe>`;
+  document.body.prepend(w);
+  w.onclick = ()=>w.remove();
+}
+
+// подписки
+function cleanChannel(val){
+  val = val.trim();
+  if(val.includes("?")) val = val.split("?")[0];
+  if(val.includes("/@")) val = "@"+val.split("/@")[1].split("/")[0];
+  if(val.includes("/channel/")) val = val.split("/channel/")[1].split("/")[0];
+  return val;
+}
+
+function addChannel(){
+  let input = document.getElementById("subInput");
+  let val = cleanChannel(input.value);
+  if(!val) return;
+  let subs = JSON.parse(localStorage.getItem("subs")||"[]");
+  if(!subs.includes(val)) subs.push(val);
+  localStorage.setItem("subs", JSON.stringify(subs));
+  input.value = "";
+  loadSubscriptions();
+}
+
+async function loadSubscriptions(){
+  let subs = JSON.parse(localStorage.getItem("subs")||"[]");
+  let list = document.getElementById("subs-list");
+  list.innerHTML = "";
+  if(subs.length==0){ list.innerHTML="Нет подписок"; return; }
+
+  for(let ch of subs){
+    try{
+      let url = ch.startsWith("@") ? `${API}/channel/${ch}` : `${API}/channel/${ch}`;
+      let r = await fetch(url);
+      let data = await r.json();
+      if(data.relatedStreams){
+        list.innerHTML += `<h3>${data.name || ch}</h3>`;
+        data.relatedStreams.slice(0,3).forEach(v=>{
+          let vid = v.url.split("v=")[1];
+          list.innerHTML += `
+            <div class="video" onclick="playVideo('${vid}')">
+              <img src="${v.thumbnail}" width="100%">
+              <p>${v.title}</p>
+            </div>
+          `;
+        });
+      } else {
+        list.innerHTML += `<h3>${ch}</h3><p>Не удалось загрузить</p>`;
+      }
+    }catch(e){
+      list.innerHTML += `<h3>${ch}</h3><p>Ошибка загрузки</p>`;
+    }
+  }
+}
+</script>
 </body>
 </html>
