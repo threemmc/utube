@@ -3,148 +3,163 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Мой YouTube</title>
+  <title>YouTube</title>
   <style>
     body {
-      margin:0;
+      margin: 0;
       font-family: sans-serif;
-      background:#111;
-      color:#eee;
+      background: #111;
+      color: #fff;
     }
     header {
-      display:flex;
-      justify-content:space-around;
-      background:#222;
-      padding:10px;
-      position:fixed;
-      bottom:0;
-      width:100%;
+      background: #222;
+      padding: 10px;
+      display: flex;
+      justify-content: space-around;
     }
     header button {
-      background:none;
-      border:none;
-      color:#eee;
-      font-size:16px;
+      flex: 1;
+      margin: 0 5px;
+      padding: 12px;
+      border: none;
+      border-radius: 6px;
+      background: #333;
+      color: #fff;
+      font-size: 16px;
+      cursor: pointer;
     }
-    .page { display:none; padding:20px; padding-bottom:70px;}
-    .active { display:block; }
+    header button.active {
+      background: #555;
+    }
+    .page { display: none; padding: 15px; }
+    .page.active { display: block; }
+
+    /* одинаковые стили для input и кнопок */
+    input, .btn {
+      width: 100%;
+      padding: 12px;
+      margin: 5px 0;
+      border: none;
+      border-radius: 6px;
+      font-size: 16px;
+      box-sizing: border-box;
+    }
+    input { background: #222; color: #fff; }
+    .btn { background: #333; color: #fff; cursor: pointer; }
+
     .video {
-      background:#222;
-      margin:10px 0;
-      padding:10px;
-      border-radius:8px;
-      cursor:pointer;
+      margin: 10px 0;
+      background: #222;
+      padding: 10px;
+      border-radius: 6px;
     }
-    iframe { width:100%; border:none; border-radius:8px; }
-    .subs-input { width:100%; padding:8px; margin:10px 0; border-radius:5px; border:1px solid #444; background:#111; color:#eee;}
-    .btn { display:block; width:100%; margin:5px 0; padding:10px; background:#333; border:none; border-radius:5px; color:#eee; }
+    .video iframe {
+      width: 100%;
+      height: 200px;
+      border: none;
+      border-radius: 6px;
+    }
   </style>
 </head>
 <body>
+  <header>
+    <button onclick="showPage('home')" class="active">Главная</button>
+    <button onclick="showPage('subs')">Подписки</button>
+    <button onclick="showPage('profile')">Профиль</button>
+  </header>
 
-<div id="home" class="page active">
-  <h2>Главная</h2>
-  <div id="home-videos"></div>
-</div>
+  <div id="home" class="page active">
+    <h2>Главная</h2>
+    <div id="home-videos"></div>
+  </div>
 
-<div id="subs" class="page">
-  <h2>Подписки</h2>
-  <input id="subInput" class="subs-input" placeholder="Ссылка или @username">
-  <button class="btn" onclick="addChannel()">Добавить канал</button>
-  <button class="btn" onclick="loadSubscriptions()">Обновить</button>
-  <div id="subs-list"></div>
-</div>
+  <div id="subs" class="page">
+    <h2>Подписки</h2>
+    <input id="channelInput" placeholder="Вставь ссылку или @username">
+    <button class="btn" onclick="addChannel()">Добавить канал</button>
+    <button class="btn" onclick="loadSubscriptions()">Обновить</button>
+    <div id="subs-videos"></div>
+  </div>
 
-<div id="profile" class="page">
-  <h2>Профиль</h2>
-  <p>Тут будет инфа</p>
-</div>
-
-<header>
-  <button onclick="openPage('home')">Главная</button>
-  <button onclick="openPage('subs')">Подписки</button>
-  <button onclick="openPage('profile')">Профиль</button>
-</header>
+  <div id="profile" class="page">
+    <h2>Профиль</h2>
+    <p>Тут будет инфо.</p>
+  </div>
 
 <script>
-const API = "https://pipedapi.kavin.rocks";
+const API_KEY = "YOUR_API_KEY"; // вставь сюда свой ключ
+let subscriptions = JSON.parse(localStorage.getItem("subs") || "[]");
 
-function openPage(id){
-  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
-  document.getElementById(id).classList.add('active');
+function showPage(id) {
+  document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
+  document.querySelectorAll("header button").forEach(b => b.classList.remove("active"));
+  document.getElementById(id).classList.add("active");
+  event.target.classList.add("active");
 }
 
-// загрузка популярных видео
-async function loadHome(){
-  let r = await fetch(`${API}/trending`);
-  let data = await r.json();
-  let wrap = document.getElementById("home-videos");
-  wrap.innerHTML = "";
-  data.forEach(v=>{
-    wrap.innerHTML += `
-      <div class="video" onclick="playVideo('${v.url.split('v=')[1]}')">
-        <img src="${v.thumbnail}" width="100%">
-        <p>${v.title}</p>
-      </div>
-    `;
+// загрузка трендов
+async function loadHome() {
+  let res = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet&chart=mostPopular&maxResults=5&regionCode=RU&key=${API_KEY}`);
+  let data = await res.json();
+  let box = document.getElementById("home-videos");
+  box.innerHTML = "";
+  data.items.forEach(v => {
+    box.innerHTML += `
+      <div class="video">
+        <iframe src="https://www.youtube.com/embed/${v.id}" allowfullscreen></iframe>
+        <p>${v.snippet.title}</p>
+      </div>`;
   });
 }
 loadHome();
 
-function playVideo(id){
-  let w = document.createElement("div");
-  w.innerHTML = `<iframe src="https://www.youtube.com/embed/${id}" allowfullscreen></iframe>`;
-  document.body.prepend(w);
-  w.onclick = ()=>w.remove();
+// функция добавления канала
+async function addChannel() {
+  let input = document.getElementById("channelInput").value.trim();
+  if (!input) return;
+
+  let channelId = null;
+
+  // если ссылка
+  if (input.includes("channel/")) {
+    channelId = input.split("channel/")[1].split(/[/?]/)[0];
+  }
+  // если @username
+  else if (input.startsWith("@")) {
+    let username = input.slice(1);
+    let res = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&type=channel&q=${username}&key=${API_KEY}`);
+    let data = await res.json();
+    if (data.items && data.items.length > 0) {
+      channelId = data.items[0].snippet.channelId;
+    }
+  }
+
+  if (channelId) {
+    subscriptions.push(channelId);
+    localStorage.setItem("subs", JSON.stringify(subscriptions));
+    loadSubscriptions();
+  } else {
+    alert("Не удалось найти канал");
+  }
 }
 
-// подписки
-function cleanChannel(val){
-  val = val.trim();
-  if(val.includes("?")) val = val.split("?")[0];
-  if(val.includes("/@")) val = "@"+val.split("/@")[1].split("/")[0];
-  if(val.includes("/channel/")) val = val.split("/channel/")[1].split("/")[0];
-  return val;
-}
-
-function addChannel(){
-  let input = document.getElementById("subInput");
-  let val = cleanChannel(input.value);
-  if(!val) return;
-  let subs = JSON.parse(localStorage.getItem("subs")||"[]");
-  if(!subs.includes(val)) subs.push(val);
-  localStorage.setItem("subs", JSON.stringify(subs));
-  input.value = "";
-  loadSubscriptions();
-}
-
-async function loadSubscriptions(){
-  let subs = JSON.parse(localStorage.getItem("subs")||"[]");
-  let list = document.getElementById("subs-list");
-  list.innerHTML = "";
-  if(subs.length==0){ list.innerHTML="Нет подписок"; return; }
-
-  for(let ch of subs){
-    try{
-      let url = ch.startsWith("@") ? `${API}/channel/${ch}` : `${API}/channel/${ch}`;
-      let r = await fetch(url);
-      let data = await r.json();
-      if(data.relatedStreams){
-        list.innerHTML += `<h3>${data.name || ch}</h3>`;
-        data.relatedStreams.slice(0,3).forEach(v=>{
-          let vid = v.url.split("v=")[1];
-          list.innerHTML += `
-            <div class="video" onclick="playVideo('${vid}')">
-              <img src="${v.thumbnail}" width="100%">
-              <p>${v.title}</p>
-            </div>
-          `;
-        });
-      } else {
-        list.innerHTML += `<h3>${ch}</h3><p>Не удалось загрузить</p>`;
-      }
-    }catch(e){
-      list.innerHTML += `<h3>${ch}</h3><p>Ошибка загрузки</p>`;
+// загрузка подписок
+async function loadSubscriptions() {
+  let box = document.getElementById("subs-videos");
+  box.innerHTML = "";
+  for (let id of subscriptions) {
+    try {
+      let res = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${id}&order=date&maxResults=3&key=${API_KEY}`);
+      let data = await res.json();
+      data.items.forEach(v => {
+        box.innerHTML += `
+          <div class="video">
+            <iframe src="https://www.youtube.com/embed/${v.id.videoId}" allowfullscreen></iframe>
+            <p>${v.snippet.title}</p>
+          </div>`;
+      });
+    } catch(e) {
+      box.innerHTML += `<p>Ошибка загрузки подписки ${id}</p>`;
     }
   }
 }
