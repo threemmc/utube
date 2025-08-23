@@ -10,7 +10,7 @@
       font-family: sans-serif;
       background: #111;
       color: #fff;
-      padding-bottom: 60px; /* чтобы контент не залезал под док-бар */
+      padding-bottom: 60px;
     }
     /* нижний док-бар */
     header {
@@ -71,6 +71,13 @@
 <body>
   <div id="home" class="page active">
     <h2>Главная</h2>
+
+    <!-- новое поле для вставки ссылки -->
+    <input id="videoInput" placeholder="Вставь ссылку на YouTube видео">
+    <button class="btn" onclick="playVideo()">Смотреть</button>
+    <div id="videoPlayer"></div>
+
+    <h3>Тренды</h3>
     <div id="home-videos"></div>
   </div>
 
@@ -105,6 +112,30 @@ function showPage(id) {
   event.target.classList.add("active");
 }
 
+// ====== новая функция: проигрывание видео по ссылке ======
+function playVideo() {
+  let url = document.getElementById("videoInput").value.trim();
+  if (!url) return;
+
+  let videoId = null;
+
+  // обработка форматов ссылок
+  if (url.includes("v=")) {
+    videoId = url.split("v=")[1].split("&")[0];
+  } else if (url.includes("youtu.be/")) {
+    videoId = url.split("youtu.be/")[1].split(/[?&]/)[0];
+  }
+
+  if (videoId) {
+    document.getElementById("videoPlayer").innerHTML = `
+      <div class="video">
+        <iframe src="https://www.youtube.com/embed/${videoId}" allowfullscreen></iframe>
+      </div>`;
+  } else {
+    alert("Не удалось определить ID видео");
+  }
+}
+
 // загрузка трендов
 async function loadHome() {
   let res = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet&chart=mostPopular&maxResults=5&regionCode=RU&key=${API_KEY}`);
@@ -128,12 +159,9 @@ async function addChannel() {
 
   let channelId = null;
 
-  // если ссылка формата /channel/...
   if (input.includes("channel/")) {
     channelId = input.split("channel/")[1].split(/[/?]/)[0];
-  }
-  // если @username или ссылка вида youtube.com/@username
-  else if (input.includes("@")) {
+  } else if (input.includes("@")) {
     let username = input.split("@")[1].split(/[/?]/)[0];
     let res = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&type=channel&q=${username}&key=${API_KEY}`);
     let data = await res.json();
